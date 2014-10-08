@@ -229,7 +229,19 @@ module Mongoid
         end
 
         def track_update
+          track_update_for_associations
           track_history_for_action(:update)
+        end
+
+        def track_update_for_associations
+          associations
+            .reject do |a, h|
+              h[:relation] == Mongoid::Relations::Referenced::In ||
+              h[:relation] == Mongoid::Relations::Embedded::In
+            end
+            .map { |a, h| send(a) }
+            .flatten.compact
+            .each { |d| d.send(:track_update) }
         end
 
         def track_destroy

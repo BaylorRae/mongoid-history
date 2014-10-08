@@ -9,6 +9,7 @@ describe Mongoid::History::Tracker do
       field :name, type: String
       belongs_to :user, inverse_of: :models
       embeds_many :embones
+      accepts_nested_attributes_for :embones
 
       track_history on: :all,       # track title and body fields only, default is :all
                     modifier_field: :modifier, # adds "referenced_in :modifier" to track who made the change, default is :modifier
@@ -71,7 +72,25 @@ describe Mongoid::History::Tracker do
     embedded2.save!
 
     model.history_tracks.first.undo! user
+
+    # without calling this, line 92 throws an error on
+    # lib/mongoid/history/trackable.rb#315 (327 in this branch)
+    #   NoMethodError:
+    #     undefined method `[]' for nil:NilClass
+    embedded1.history_tracks
+
     embedded1.reload.name.should == "e1name"
     embedded2.reload.name.should == "e2name"
+  end
+
+  it "tracks changes for nested attributes" do
+    model = Model.create!(name: 'model_2')
+    embedded = model.embones.create(name: 'embedded_1')
+
+    model.update_attributes(name: 'model_2-updated', embones_attributes: [{ name: 'embedded_1-updated', id: embedded.id }])
+
+    expect(embedded.history_tracks.count).to eq(1)
+    expect(embedded.history_tracks.last.original).to eq({ 'name' => 'embedded_1' })
+    expect(embedded.history_tracks.last.modified).to eq({ 'name' => 'embedded_1-updated' })
   end
 end
